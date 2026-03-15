@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workout Log Dashboard v2</title>
+  <style>
+    :root{--bg:#0b1220;--card:#121a2b;--card2:#17233a;--text:#eef2ff;--muted:#9fb0d1;--border:#2a3a5c;--accent:#3f7cff;--soft:#1e2d49;--green:#83e5bf;--danger:#6d2f3a;--radius:18px}
+    *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(180deg,#0b1220,#101a2f);color:var(--text)}
+    .wrap{max-width:720px;margin:0 auto;padding:14px}.card{background:linear-gradient(180deg,var(--card),var(--card2));border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+    h1,h2,h3,p{margin:0}h1{font-size:1.45rem;margin-bottom:6px}h2{font-size:1rem;margin-bottom:10px}h3{font-size:.98rem}.sub,.tiny{color:var(--muted)}.sub{font-size:.95rem}.tiny{font-size:.82rem}
+    .toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}button,input,select,textarea{width:100%;min-height:46px;border-radius:14px;border:1px solid var(--border);background:#0f1728;color:var(--text);padding:12px;font-size:16px}button{cursor:pointer;background:var(--soft)}.primary{background:linear-gradient(180deg,#3f7cff,#2a63dd)}.danger{background:#472026;border-color:#6d2f3a;color:#ffd8dd}.ghost{background:transparent}
+    .grid{display:grid;gap:10px}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}.stat{border:1px solid var(--border);border-radius:14px;padding:10px;background:rgba(255,255,255,.02)}.stat .n{font-weight:700;font-size:1.08rem}
+    .exercise{border:1px solid var(--border);border-radius:16px;padding:12px;background:rgba(255,255,255,.02);margin-top:10px}.set-block{border:1px solid var(--border);border-radius:16px;padding:10px;background:rgba(255,255,255,.02);margin-top:10px}.target{font-size:.82rem;color:var(--green);margin-top:4px}.set-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.set-head{display:flex;justify-content:space-between;align-items:center;margin-top:10px}.set-label{font-size:.85rem;color:var(--muted)}.row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.history{border:1px solid var(--border);border-radius:16px;padding:12px;background:rgba(255,255,255,.02);margin-top:10px}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#1a2842;border:1px solid var(--border);font-size:.78rem;color:var(--green)}.success{color:var(--green);font-size:.88rem;margin-top:8px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <section class="card">
+    <h1>Workout Log</h1>
+    <p class="sub">Phone-first dashboard for Day A / Day B. Save locally, then export CSV or JSON for upload to ChatGPT.</p>
+    <div class="toolbar">
+      <button class="primary" id="saveSessionBtn">Save Session</button>
+      <button id="exportCsvBtn">Export CSV</button>
+      <button id="shareCsvBtn">Share CSV</button>
+      <button class="ghost" id="copyJsonBtn">Copy JSON</button>
+    </div>
+    <div class="success" id="status"></div>
+  </section>
+  <section class="card">
+    <h2>Session Setup</h2>
+    <div class="grid">
+      <div><div class="tiny">Date</div><input type="date" id="sessionDate"></div>
+      <div><div class="tiny">Workout</div><select id="workoutType"><option value="A">Day A — Push + Legs</option><option value="B">Day B — Pull + Posterior Chain + Shoulder Health</option></select></div>
+      <div><div class="tiny">Notes</div><textarea id="sessionNotes" placeholder="Energy, soreness, short session, travel, PRs..."></textarea></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n" id="statExercises">0</div><div class="tiny">Exercises</div></div>
+      <div class="stat"><div class="n" id="statSets">0</div><div class="tiny">Logged Sets</div></div>
+      <div class="stat"><div class="n" id="statVolume">0</div><div class="tiny">Volume</div></div>
+    </div>
+  </section>
+  <section class="card"><h2>Exercises</h2><div id="exerciseContainer"></div></section>
+  <section class="card"><h2>Saved Sessions</h2><div id="history"></div><div class="row-actions"><button class="danger" id="clearAllBtn">Delete All Sessions</button></div></section>
+</div>
+<script>
+const STORAGE_KEY='andrea_workout_log_db_v2';
+const workoutTemplates={A:[{name:'Iso Incline Press',target:'10×70 | 8×80 | 6–8×90 | 4–6×95'},{name:'Pectoral Fly',target:'12×115 | 10×130 | 8×145 | 6–8×160 | optional 175'},{name:'Shoulder Press',target:'12×30 | 10×35 | 8–10×40'},{name:'Inclined Leg Press',target:'12×230 | 10×270 | 10×340 | 8–10×390–400'},{name:'Hip Thrust',target:'12×90 | 10×140 | 8–10×180'},{name:'Lateral Raises',target:'3×10–12 at 10–15 cable equivalent'},{name:'Abs',target:'2–3 rounds'}],B:[{name:'Pull-Ups',target:'9 | 7 | 6'},{name:'Seated Row / Lat Machine',target:'10×120 | 8×140 | 7×140 | 7×140'},{name:'One-Arm Pull',target:'10×42.5 | 10×50 | 8–10×55 | optional 60'},{name:'Rear Deltoids',target:'10×100 | 10×115 | 10×115'},{name:'Guided Rack Deadlift',target:'10×90 | 10×110 | 8–10×120'},{name:'Leg Curl',target:'10×50 | 10×70 | 10×70'},{name:'Shoulder Health Block',target:'2–3 sets each'},{name:'Abs',target:'2–3 movements'}]};
+const sessionDateEl=document.getElementById('sessionDate'), workoutTypeEl=document.getElementById('workoutType'), sessionNotesEl=document.getElementById('sessionNotes'), exerciseContainer=document.getElementById('exerciseContainer'), historyEl=document.getElementById('history'), statusEl=document.getElementById('status'), statExercises=document.getElementById('statExercises'), statSets=document.getElementById('statSets'), statVolume=document.getElementById('statVolume');
+function todayISO(){const d=new Date(), tz=d.getTimezoneOffset()*60000; return new Date(d-tz).toISOString().slice(0,10)}
+function getDB(){try{return JSON.parse(localStorage.getItem(STORAGE_KEY))||{sessions:[]}}catch{return {sessions:[]}}}
+function setDB(db){localStorage.setItem(STORAGE_KEY,JSON.stringify(db))}
+function showStatus(msg){statusEl.textContent=msg; setTimeout(()=>{if(statusEl.textContent===msg) statusEl.textContent=''},2500)}
+function makeSetBlock(n, weight='', reps=''){const wrap=document.createElement('div'); wrap.className='set-block'; wrap.style.padding='10px'; wrap.innerHTML=`<div class="set-head"><div class="set-label">Set ${n}</div><button type="button" class="danger remove-set" style="width:auto;min-height:40px;padding:8px 12px;">Delete</button></div><div class="set-row"><div><div class="tiny">Weight</div><input type="number" step="0.1" class="weight-input" value="${weight}" placeholder="Weight"></div><div><div class="tiny">Reps</div><input type="number" step="1" class="reps-input" value="${reps}" placeholder="Reps"></div></div>`; wrap.querySelector('.remove-set').addEventListener('click',()=>{wrap.remove(); renumber(wrap.parentElement); updateStats()}); wrap.querySelectorAll('input').forEach(i=>i.addEventListener('input',updateStats)); return wrap}
+function renumber(setList){[...setList.children].forEach((el,idx)=>{el.querySelector('.set-label').textContent=`Set ${idx+1}`})}
+function renderExercises(){const template=workoutTemplates[workoutTypeEl.value]; exerciseContainer.innerHTML=''; template.forEach(ex=>{const card=document.createElement('div'); card.className='exercise'; card.dataset.exerciseName=ex.name; card.innerHTML=`<h3>${ex.name}</h3><div class="target">Target: ${ex.target}</div><div class="set-list"></div><div class="row-actions"><button type="button" class="add-set">Add Set</button></div>`; const setList=card.querySelector('.set-list'); const initial=(ex.name==='Abs'||ex.name==='Shoulder Health Block')?2:3; for(let i=1;i<=initial;i++) setList.appendChild(makeSetBlock(i)); card.querySelector('.add-set').addEventListener('click',()=>{setList.appendChild(makeSetBlock(setList.children.length+1)); updateStats()}); exerciseContainer.appendChild(card)}); updateStats()}
+function gatherCurrentSession(){const exercises=[...document.querySelectorAll('#exerciseContainer > .exercise')].map(card=>{const setList=card.querySelector('.set-list'); const sets=setList?[...setList.children].map((row,idx)=>({set_number:idx+1, weight:row.querySelector('.weight-input').value===''?null:Number(row.querySelector('.weight-input').value), reps:row.querySelector('.reps-input').value===''?null:Number(row.querySelector('.reps-input').value)})).filter(s=>s.weight!==null||s.reps!==null):[]; return {exercise:card.dataset.exerciseName, target:card.querySelector('.target').textContent.replace('Target: ',''), sets}}).filter(ex=>ex.exercise); return {id:crypto.randomUUID?crypto.randomUUID():String(Date.now()), date:sessionDateEl.value, workout:workoutTypeEl.value, notes:sessionNotesEl.value.trim(), exercises, created_at:new Date().toISOString()}}
+function computeSessionStats(session){let setCount=0, volume=0; session.exercises.forEach(ex=>ex.sets.forEach(s=>{setCount++; if(typeof s.weight==='number'&&typeof s.reps==='number') volume += s.weight*s.reps})); return {setCount, volume}}
+function updateStats(){const s=gatherCurrentSession(), st=computeSessionStats(s); statExercises.textContent=s.exercises.length; statSets.textContent=st.setCount; statVolume.textContent=Math.round(st.volume).toLocaleString()}
+function saveSession(){const s=gatherCurrentSession(), st=computeSessionStats(s); if(!s.date){showStatus('Please select a date.'); return} if(st.setCount===0){showStatus('Enter at least one set.'); return} const db=getDB(); db.sessions.unshift(s); setDB(db); renderHistory(); showStatus('Session saved.')}
+function deleteSession(id){const db=getDB(); db.sessions=db.sessions.filter(s=>s.id!==id); setDB(db); renderHistory(); showStatus('Session deleted.')}
+function renderHistory(){const db=getDB(); historyEl.innerHTML=''; if(!db.sessions.length){historyEl.innerHTML='<div class="tiny">No sessions saved yet.</div>'; return} db.sessions.forEach(s=>{const st=computeSessionStats(s); const d=document.createElement('div'); d.className='history'; d.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><div><h3>${s.date} <span class="pill">${s.workout==='A'?'Day A':'Day B'}</span></h3><div class="tiny" style="margin-top:4px">${st.setCount} sets · volume ${Math.round(st.volume).toLocaleString()}</div></div><button class="danger" style="width:auto">Delete</button></div><div class="tiny" style="margin-top:8px">${s.notes||'No notes'}</div>`; d.querySelector('button').addEventListener('click',()=>deleteSession(s.id)); historyEl.appendChild(d)})}
+function sessionsToCsv(db){const rows=[['session_id','date','workout','notes','exercise','set_number','weight','reps','target','created_at']]; db.sessions.forEach(s=>s.exercises.forEach(ex=>{if(!ex.sets.length){rows.push([s.id,s.date,s.workout,s.notes||'',ex.exercise,'','','',ex.target||'',s.created_at||''])} else ex.sets.forEach(set=>rows.push([s.id,s.date,s.workout,s.notes||'',ex.exercise,set.set_number,set.weight??'',set.reps??'',ex.target||'',s.created_at||'']))})); return rows.map(r=>r.map(v=>{const s=String(v??''); return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s}).join(',')).join('\n')}
+function download(filename, content, mime){const blob=new Blob([content],{type:mime}), url=URL.createObjectURL(blob), a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)}
+function exportCsv(){const db=getDB(); download('workout_sessions.csv', sessionsToCsv(db), 'text/csv;charset=utf-8'); showStatus('CSV exported.')}
+async function shareCsv(){const db=getDB(), content=sessionsToCsv(db), file=new File([content],'workout_sessions.csv',{type:'text/csv;charset=utf-8'}); if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file], title:'Workout CSV', text:'Workout log export'}); showStatus('Share sheet opened.'); return}catch(e){if(e&&e.name==='AbortError') return}} exportCsv(); showStatus('Share not supported here, so the file was downloaded instead.')}
+async function copyJson(){await navigator.clipboard.writeText(JSON.stringify(getDB(),null,2)); showStatus('JSON copied.')}
+function clearAll(){if(!confirm('Delete all sessions?')) return; setDB({sessions:[]}); renderHistory(); showStatus('All sessions deleted.')}
+document.getElementById('saveSessionBtn').addEventListener('click',saveSession); document.getElementById('exportCsvBtn').addEventListener('click',exportCsv); document.getElementById('shareCsvBtn').addEventListener('click',shareCsv); document.getElementById('copyJsonBtn').addEventListener('click',copyJson); document.getElementById('clearAllBtn').addEventListener('click',clearAll); workoutTypeEl.addEventListener('change',renderExercises);
+sessionDateEl.value=todayISO(); renderExercises(); renderHistory();
+</script>
+</body>
+</html>
